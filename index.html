@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>V2 Cutover Manual Test Checklist</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1a1a1a;
+    --muted: #6b6b6b;
+    --line: #e5e5e2;
+    --accent: #2563eb;
+    --m: #ef4444;
+    --j: #10b981;
+    --k: #8b5cf6;
+    --warn: #d97706;
+    --done: #f0fdf4;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.45; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 24px 80px; }
+  header { margin-bottom: 24px; }
+  h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 14px; }
+  code { background: #efece6; padding: 1px 5px; border-radius: 3px; font-size: 0.92em; }
+
+  .me-bar {
+    background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+    color: white;
+    padding: 14px 20px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .me-bar .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+  .me-bar .who-pick { display: flex; gap: 8px; }
+  .me-bar .who-pick button {
+    padding: 8px 16px; border-radius: 999px; border: 2px solid transparent;
+    font: inherit; font-weight: 600; cursor: pointer; background: rgba(255,255,255,0.1); color: white;
+    transition: all 0.15s;
+  }
+  .me-bar .who-pick button:hover { background: rgba(255,255,255,0.18); }
+  .me-bar .who-pick button.active.m { background: var(--m); border-color: white; }
+  .me-bar .who-pick button.active.j { background: var(--j); border-color: white; }
+  .me-bar .who-pick button.active.k { background: var(--k); border-color: white; }
+  .conn { margin-left: auto; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: #facc15; }
+  .conn.live .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
+  .conn.err .dot { background: #ef4444; }
+
+  .controls {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 0 0 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .who { display: flex; gap: 14px; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 999px;
+    background: #f1f1ee; border: 1px solid var(--line);
+    font-size: 13px; user-select: none;
+  }
+  .pill .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.m { background: var(--m); }
+  .dot.j { background: var(--j); }
+  .dot.k { background: var(--k); }
+  .pill .count {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted); font-size: 12px;
+  }
+  .filter-bar {
+    display: flex; gap: 8px; align-items: center; font-size: 13px;
+  }
+  .filter-bar select, .filter-bar input[type=text] {
+    padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
+    font: inherit; background: white;
+  }
+  button.btn {
+    background: white; border: 1px solid var(--line);
+    padding: 6px 12px; border-radius: 6px; font: inherit;
+    cursor: pointer;
+  }
+  button.btn:hover { border-color: #999; }
+  button.btn.danger { color: #b00; }
+
+  details.section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  details.section[open] { box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  details.section > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-weight: 600;
+    font-size: 16px;
+    background: #fafaf8;
+    border-bottom: 1px solid transparent;
+  }
+  details.section[open] > summary { border-bottom-color: var(--line); }
+  details.section > summary::-webkit-details-marker { display: none; }
+  .chev { color: var(--muted); transition: transform 0.15s; }
+  details[open] .chev { transform: rotate(90deg); }
+  .progress {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex; gap: 10px; align-items: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .bar { width: 80px; height: 6px; background: #ececea; border-radius: 4px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--accent); width: 0%; transition: width 0.2s; }
+
+  .test {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    scroll-margin-top: 80px;
+  }
+  .test:last-child { border-bottom: none; }
+  .test.all-done { background: var(--done); }
+  .test.has-fail { background: #fef2f2; border-left: 3px solid var(--m); padding-left: 17px; }
+  .test.flash { animation: flash 1s ease; }
+  .test.jumped { animation: jumped 1.5s ease; }
+  @keyframes jumped {
+    0% { background: #fde68a; }
+    100% { background: transparent; }
+  }
+  .test.has-fail.jumped { animation: none; background: #fef2f2; }
+  @keyframes flash {
+    0% { background: #fef9c3; }
+    100% { background: transparent; }
+  }
+  .test.all-done.flash { animation: none; background: var(--done); }
+
+  .test-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: start;
+  }
+  .test-text { font-size: 14.5px; }
+  .test-text strong { font-weight: 600; }
+
+  .checks {
+    display: flex; gap: 10px;
+    flex-shrink: 0;
+    align-items: flex-start;
+  }
+  .person-status {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .person-name {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600;
+  }
+  .person-name.m { color: var(--m); }
+  .person-name.j { color: var(--j); }
+  .person-name.k { color: var(--k); }
+  .pf-group {
+    display: inline-flex;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: white;
+  }
+  .pf-btn {
+    background: white;
+    border: none;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--muted);
+    font: 600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    transition: all 0.1s;
+    border-right: 1px solid var(--line);
+  }
+  .pf-btn:last-child { border-right: none; }
+  .pf-btn:hover:not(:disabled):not(.active) { background: #f4f4f1; }
+  .pf-btn:disabled { cursor: not-allowed; opacity: 0.45; }
+  .pf-btn.pass.active { background: #10b981; color: white; }
+  .pf-btn.fail.active { background: #ef4444; color: white; }
+  .pf-group.disabled { opacity: 0.6; }
+
+  .notes-toggle {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--accent);
+    background: none; border: none; cursor: pointer;
+    padding: 0; text-decoration: underline;
+  }
+  .notes-area {
+    margin-top: 10px;
+    display: none;
+  }
+  .notes-area.open { display: block; }
+  .note-block {
+    margin-bottom: 8px;
+    border-left: 3px solid var(--line);
+    padding-left: 10px;
+    position: relative;
+  }
+  .note-block.m { border-left-color: var(--m); }
+  .note-block.j { border-left-color: var(--j); }
+  .note-block.k { border-left-color: var(--k); }
+  .note-block label {
+    display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .note-block textarea {
+    width: 100%;
+    min-height: 38px;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 13px;
+    resize: vertical;
+    background: #fbfbf9;
+  }
+  .note-block textarea:focus {
+    outline: none; border-color: var(--accent); background: white;
+  }
+  .note-block textarea[readonly] { background: #f4f4f1; cursor: not-allowed; color: #555; }
+  .note-block .saving {
+    position: absolute; right: 6px; top: 4px; font-size: 10px; color: var(--muted);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .note-block.saving .saving { opacity: 1; }
+
+  .smoke {
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+  }
+  .smoke > summary { background: #ffedd5; }
+
+  .env-info {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 20px; margin-bottom: 18px; font-size: 13.5px;
+  }
+  .env-info h3 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .env-info ul { margin: 6px 0; padding-left: 20px; }
+  .env-info table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  .env-info th, .env-info td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .env-info th { background: #fafaf8; font-weight: 600; }
+
+  .toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: #1f2937; color: white;
+    padding: 8px 14px; border-radius: 6px;
+    font-size: 12px; opacity: 0; transform: translateY(10px);
+    transition: all 0.25s; pointer-events: none; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .failures-panel {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 10px;
+    margin-bottom: 18px;
+    overflow: hidden;
+    display: none;
+  }
+  .failures-panel.has-failures { display: block; }
+  .failures-panel summary {
+    padding: 12px 18px;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    color: #991b1b;
+    font-size: 14px;
+    background: #fee2e2;
+  }
+  .failures-panel summary::-webkit-details-marker { display: none; }
+  .failures-panel summary .badge {
+    background: var(--m); color: white;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 12px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .failures-panel ul {
+    margin: 0; padding: 8px 0; list-style: none;
+  }
+  .failure-item {
+    padding: 8px 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    border-bottom: 1px solid #fee2e2;
+    cursor: pointer;
+    transition: background 0.1s;
+    font-size: 13.5px;
+  }
+  .failure-item:last-child { border-bottom: none; }
+  .failure-item:hover { background: #fee2e2; }
+  .failure-item .who-tag {
+    flex-shrink: 0;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    color: white;
+    margin-top: 2px;
+  }
+  .failure-item .who-tag.m { background: var(--m); }
+  .failure-item .who-tag.j { background: var(--j); }
+  .failure-item .who-tag.k { background: var(--k); }
+  .failure-item .ftext { flex: 1; }
+  .failure-item .fnote {
+    color: var(--muted); font-size: 12.5px; margin-top: 2px; font-style: italic;
+  }
+  .failure-item .fsection {
+    color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px;
+  }
+
+  .who-modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .who-modal-bg.show { display: flex; }
+  .who-modal {
+    background: white; border-radius: 12px; padding: 28px 32px; max-width: 420px; text-align: center;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+  }
+  .who-modal h2 { margin: 0 0 8px; font-size: 22px; }
+  .who-modal p { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  .who-modal .who-pick { justify-content: center; gap: 10px; }
+  .who-modal .who-pick button {
+    padding: 12px 22px; font-size: 15px; border-radius: 999px; border: 2px solid var(--line);
+    background: white; cursor: pointer; font-weight: 600;
+  }
+  .who-modal .who-pick button.m { color: var(--m); border-color: var(--m); }
+  .who-modal .who-pick button.j { color: var(--j); border-color: var(--j); }
+  .who-modal .who-pick button.k { color: var(--k); border-color: var(--k); }
+  .who-modal .who-pick button:hover { transform: translateY(-2px); }
+
+  @media (max-width: 700px) {
+    .test-row { grid-template-columns: 1fr; }
+    .checks { flex-wrap: wrap; }
+    .controls { flex-direction: column; align-items: stretch; }
+    .me-bar { flex-direction: column; align-items: stretch; }
+    .conn { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="who-modal-bg" id="who-modal">
+  <div class="who-modal">
+    <h2>Who's testing?</h2>
+    <p>Pick yourself. You can switch any time. Other people's checks and notes will appear in real time.</p>
+    <div class="who-pick">
+      <button class="m" data-pick="m">Mykyta</button>
+      <button class="j" data-pick="j">James</button>
+      <button class="k" data-pick="k">Kaja</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<header>
+  <h1>V2 cutover manual test checklist (ops)</h1>
+  <div class="sub">Run end-to-end tests on V2 (private URL) BEFORE flipping the customer-facing FE backend URL. Synced live across the team via Supabase.</div>
+</header>
+
+<div class="me-bar">
+  <span class="label">You are:</span>
+  <div class="who-pick" id="who-pick">
+    <button data-pick="m" class="m">Mykyta</button>
+    <button data-pick="j" class="j">James</button>
+    <button data-pick="k" class="k">Kaja</button>
+  </div>
+  <div class="conn" id="conn"><span class="dot"></span><span id="conn-text">Connecting…</span></div>
+</div>
+
+<div class="env-info">
+  <h3>Test environment</h3>
+  <ul>
+    <li>V2 frontend (private):</li>
+    <li>V2 admin (private):</li>
+    <li>Admin login: <code>admin@eatchefly.com</code> / <code>adminChefly21</code></li>
+    <li>V2 prod gateway: <code>https://6ve2zid6tb.execute-api.eu-west-2.amazonaws.com/api</code></li>
+  </ul>
+  <h3 style="margin-top:14px">Useful test customers</h3>
+  <table>
+    <thead><tr><th>Email</th><th>State</th><th>Use for</th></tr></thead>
+    <tbody>
+      <tr><td><code>vchikwanha@yahoo.com</code></td><td>active sub, 85 orders, recent paid</td><td>login + read flows</td></tr>
+      <tr><td><code>jan.szafranski@gmail.com</code></td><td>active sub, 148 orders</td><td>high-volume customer view</td></tr>
+      <tr><td><code>pharris8711@gmail.com</code></td><td>cancelled, single order</td><td>edge: minimal data</td></tr>
+      <tr><td><code>f.remplakowski@gmail.com</code></td><td>paused→cancelled</td><td>edge: was paused</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:12.5px;color:var(--muted);margin-top:10px;margin-bottom:0">You will not know plaintext passwords for migrated customers (V1 hashes preserved). For login flow tests, use forgot-password to reset, OR pick a known account where you have credentials.</p>
+</div>
+
+<details class="failures-panel" id="failures-panel" open>
+  <summary>
+    <span>Failures</span>
+    <span class="badge" id="fail-count">0</span>
+    <span style="margin-left:auto;font-weight:400;font-size:12px;opacity:0.7">click to jump</span>
+  </summary>
+  <ul id="failures-list"></ul>
+</details>
+
+<div class="controls">
+  <div class="who">
+    <div class="pill"><span class="dot m"></span><span>Mykyta</span><span class="count" id="count-m">0</span></div>
+    <div class="pill"><span class="dot j"></span><span>James</span><span class="count" id="count-j">0</span></div>
+    <div class="pill"><span class="dot k"></span><span>Kaja</span><span class="count" id="count-k">0</span></div>
+  </div>
+  <div class="filter-bar">
+    <label>Show:
+      <select id="filter">
+        <option value="all">All tests</option>
+        <option value="incomplete">Not tested (by anyone)</option>
+        <option value="any-fail">Has a failure</option>
+        <option value="all-pass">All three passed</option>
+        <option value="has-notes">Has notes</option>
+      </select>
+    </label>
+    <button class="btn" id="expand-all">Expand all</button>
+    <button class="btn" id="collapse-all">Collapse all</button>
+    <button class="btn" id="export-btn">Export</button>
+  </div>
+</div>
+
+<div id="sections"></div>
+
+<div class="toast" id="toast">Saved</div>
+
+</div>
+
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL = "https://mzdlhllubuyaqsayfsmg.supabase.co";
+const SUPABASE_KEY = "sb_publishable_WHX1Lfg46tPKBDqW4ioWLw_0jZfLaKT";
+const TABLE = "cutover_test_state";
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  realtime: { params: { eventsPerSecond: 10 } }
+});
+
+const TESTS = [
+  { section: "Customer-facing frontend — Authentication", items: [
+    { id: "auth-login", html: "<strong>Login</strong> with a migrated customer account (use forgot-password to set a new password if needed)" },
+    { id: "auth-forgot", html: "<strong>Forgot password</strong>: trigger reset email arrives → reset token works → new login works" },
+    { id: "auth-signup", html: "<strong>Sign-up flow</strong> for a NEW user: account creates, email verification mail sent, can log in" },
+    { id: "auth-logout", html: "<strong>Logout</strong> clears session" },
+  ]},
+  { section: "Customer-facing — Subscription view", items: [
+    { id: "sub-details", html: "View own subscription details (delivery schedule, status, mealsPerOrder)" },
+    { id: "sub-active", html: "<strong>Active customer</strong>: shows next charge date and next delivery date correctly" },
+    { id: "sub-cancelled", html: "<strong>Cancelled customer</strong>: shows cancelled status; no next-charge prompt" },
+    { id: "sub-paused", html: "<strong>Paused→cancelled customer</strong>: shows cancelled (paused state should not appear)" },
+  ]},
+  { section: "Customer-facing — Orders view", items: [
+    { id: "ord-list", html: "<strong>Order history list</strong> loads, paginated correctly" },
+    { id: "ord-detail", html: "<strong>Past order detail</strong> shows: line items (quantities, names from Prismic catalog), total, delivery date, payment intent" },
+    { id: "ord-refund", html: "<strong>Refunded order detail</strong> shows refund clearly (status=refunded, amount)" },
+    { id: "ord-skipped", html: "<strong>Skipped order</strong>: shows skipped state, no charge" },
+    { id: "ord-snapshot", html: "<strong>Order delivery snapshot</strong> (legacy address, name, phone) appears correctly on past orders" },
+  ]},
+  { section: "Customer-facing — Upcoming orders", items: [
+    { id: "up-next", html: "Next-week order appears" },
+    { id: "up-skip", html: "<strong>Skip an upcoming order</strong> → status flips to skipped, no charge will fire" },
+    { id: "up-unskip", html: "<strong>Un-skip</strong> → reverts to scheduled" },
+    { id: "up-admin", html: "Skip toggling reflects in admin view" },
+  ]},
+  { section: "Customer-facing — Menu / meal selection", items: [
+    { id: "menu-load", html: "Menu loads with all 90 products" },
+    { id: "menu-premium", html: "Premium products show <strong>premium price tag</strong> (extraPrice indicator)" },
+    { id: "menu-modal", html: "Product detail modal opens; <strong>nutritional info shows <code>salt (g)</code></strong> — sanity check: shouldn't see <code>sodium</code> anywhere" },
+    { id: "menu-image", html: "Product image loads (S3 URL works)" },
+    { id: "menu-select", html: "<strong>Select meals for next week</strong> → quantity selector works → save → check it persisted" },
+  ]},
+  { section: "Customer-facing — Profile / account", items: [
+    { id: "prof-show", html: "Profile shows name, email, phone correctly" },
+    { id: "prof-update", html: "<strong>Update name / phone</strong> → saves to V2 DB" },
+    { id: "prof-address", html: "<strong>Default delivery address</strong> displayed; add/edit address works" },
+    { id: "prof-payment", html: "<strong>Payment method</strong>: shows last-4 of card from Stripe; can update via Stripe element" },
+    { id: "prof-balance", html: "Customer <strong>balance / credit</strong> correctly displayed (was preserved from V1)" },
+  ]},
+  { section: "Customer-facing — Coupons", items: [
+    { id: "coup-apply", html: "<strong>Apply coupon at checkout / on subscription</strong> with a valid code (e.g., <code>BOSSMAN</code>, <code>SAVE30</code> — verify in admin's Coupon list first)" },
+    { id: "coup-discount", html: "Discount amount calculated correctly" },
+    { id: "coup-invalid", html: "Invalid coupon code shows error" },
+    { id: "coup-count", html: "Coupon usage count increments" },
+  ]},
+  { section: "Customer-facing — Referral", items: [
+    { id: "ref-code", html: "Referral code visible on profile" },
+    { id: "ref-attribution", html: "Referred-by attribution shows on UserCoupon (admin side check)" },
+  ]},
+  { section: "Customer-facing — Maintenance banner", items: [
+    { id: "maint-on", html: "When V2 maintenance flag is ON, banner shows; FE blocks reads/writes" },
+    { id: "maint-off", html: "When OFF, banner gone, normal flow" },
+  ]},
+  { section: "Admin panel — Authentication", items: [
+    { id: "admin-login", html: "Admin login works (<code>admin@eatchefly.com</code>)" },
+    { id: "admin-wrong", html: "Wrong password rejected" },
+    { id: "admin-session", html: "Session persists on refresh" },
+    { id: "admin-logout", html: "Logout clears session" },
+  ]},
+  { section: "Admin panel — Customers", items: [
+    { id: "admincust-list", html: "<strong>List customers</strong> loads, paginated, sortable, searchable" },
+    { id: "admincust-detail", html: "<strong>Open customer detail</strong>: see profile, addresses, subscriptions, payment methods, balance, balance history" },
+    { id: "admincust-balance", html: "<strong>Balance history</strong> shows correct entries with proper reasons (refund / order_deduction / admin_adjustment) and order references where applicable" },
+    { id: "admincust-edit", html: "Edit customer profile (name/phone/address) → saves" },
+  ]},
+  { section: "Admin panel — Orders", items: [
+    { id: "adminord-list", html: "List orders, paginate, filter by status" },
+    { id: "adminord-detail", html: "Open order detail: items, total, delivery date, payment, snapshot, customer info" },
+    { id: "adminord-refund-balance", html: "<strong>Refund a paid test order to credit balance</strong> → balance history entry appears with reason=refund + reference to order" },
+    { id: "adminord-refund-card", html: "<strong>Refund a paid test order to card</strong> (Stripe sandbox / known low-value) → Payment.refundType=full, refundBy=admin, refundDestination=card in metadata, customer email arrives" },
+    { id: "adminord-update-addr", html: "<strong>Update order address</strong> → saves and reflects on customer view" },
+    { id: "adminord-update-meals", html: "<strong>Update order meals</strong> → quantity changes save; OrderItems in DB updated" },
+    { id: "adminord-update-date", html: "<strong>Update order delivery date</strong> → saves" },
+    { id: "adminord-skip", html: "<strong>Skip an order</strong> → status=skipped" },
+  ]},
+  { section: "Admin panel — Subscriptions", items: [
+    { id: "adminsub-list", html: "List subscriptions" },
+    { id: "adminsub-filter", html: "Filter by status (active, cancelled)" },
+    { id: "adminsub-detail", html: "Open subscription detail; see customer + meal preferences" },
+    { id: "adminsub-cancel", html: "<strong>Cancel a sub</strong> → status flips" },
+    { id: "adminsub-reactivate", html: "<strong>Reactivate a sub</strong> (if supported)" },
+  ]},
+  { section: "Admin panel — Products", items: [
+    { id: "adminprod-list", html: "List products (90 expected)" },
+    { id: "adminprod-salt", html: "<strong>Each has nutritionalInfo.salt</strong> populated (no <code>sodium</code> anywhere)" },
+    { id: "adminprod-premium", html: "<strong>isPremium flag</strong> correctly displayed for products with <code>extraPrice > 0</code>" },
+    { id: "adminprod-image", html: "<strong>Image displays</strong> (S3 URL valid)" },
+    { id: "adminprod-toggle", html: "Toggle product active/inactive → reflects on customer-facing menu" },
+    { id: "adminprod-upload", html: "Upload new image → S3 upload works → URL stored" },
+  ]},
+  { section: "Admin panel — Coupons", items: [
+    { id: "admincoup-list", html: "List coupons (74 expected)" },
+    { id: "admincoup-values", html: "Discount values match V1 (spot-check <code>BOSSMAN</code>=100% / <code>CHEFLYBLUE</code>=15% / <code>AMIGO15</code>=£15 fixed)" },
+    { id: "admincoup-expiry", html: "Expiry dates preserved (e.g., <code>BOSSMAN</code> expires 2027-02-06)" },
+    { id: "admincoup-flags", html: "Auto-usage-only / referral / signup-only flags preserved" },
+  ]},
+  { section: "Admin panel — Delivery schedules", items: [
+    { id: "sched-default", html: "Default schedule \"weekly-wednesday\" exists and active" },
+    { id: "sched-toggle", html: "Toggle schedule status works" },
+  ]},
+  { section: "Admin panel — Search across the panel", items: [
+    { id: "search-email", html: "Search by email finds the right customer" },
+    { id: "search-order", html: "Search by order ID opens the right order" },
+    { id: "search-sub", html: "Search by sub ID opens the right sub" },
+  ]},
+  { section: "Cross-system — Stripe webhook", items: [
+    { id: "stripe-config", html: "Stripe dashboard → V2 webhook endpoint configured + signing secret matches <code>STRIPE_WEBHOOK_SECRET</code> env" },
+    { id: "stripe-trigger", html: "Trigger a <strong>test webhook event</strong> (e.g., <code>payment_intent.succeeded</code>) from Stripe dashboard" },
+    { id: "stripe-logs", html: "V2 Lambda logs show event received and signature verified" },
+    { id: "stripe-refund", html: "Refund event: V2 updates Payment.status=refunded if applicable" },
+  ]},
+  { section: "Cross-system — Shipstation webhook", items: [
+    { id: "ship-v1off", html: "V1 webhook URL removed from Shipstation config" },
+    { id: "ship-v2on", html: "V2 webhook URL added (orderNumber returned matches V2 Order.id which equals V1 numeric id)" },
+    { id: "ship-test", html: "Test order send via admin Shipstation cron OR manual trigger → ships correctly" },
+  ]},
+  { section: "Cross-system — Email (Courier)", items: [
+    { id: "email-refund", html: "Refund email arrives after admin-triggered refund" },
+    { id: "email-welcome", html: "Welcome email arrives on new sign-up" },
+    { id: "email-reset", html: "Password reset email arrives" },
+    { id: "email-reminder", html: "Order reminder email (Thu/Sat 08:00 UTC cron) — confirm email content for next firing" },
+  ]},
+  { section: "Cron jobs (post-V2-cron-deploy)", note: "First firing windows after deploy — watch CloudWatch logs.", items: [
+    { id: "cron-prepaid", html: "<strong>Sat-Mon 08:00 UTC</strong> <code>getPaymentForPrefilledOrdersCron</code> — captures pre-paid amounts" },
+    { id: "cron-update", html: "<strong>Sat-Mon 08:05 UTC</strong> <code>updateSubscriptionsCron</code> — creates next-week orders, charges customers (this is the high-stakes one)" },
+    { id: "cron-ship", html: "<strong>Tue 06:00 UTC</strong> <code>sendOrdersShipstationCron</code> — Shipstation receives orders for Wednesday delivery" },
+    { id: "cron-cleanup", html: "<strong>Tue 15:00 UTC</strong> <code>removePastUnpaidOrdersCron</code> — cleans up unpaid past orders" },
+    { id: "cron-noerrors", html: "Verify no <code>requires_payment_method</code> errors (would mean PaymentMethod migration is wrong)" },
+  ]},
+  { section: "Quick smoke (5-min minimum before going live)", smoke: true, note: "The absolute must-pass before flipping the FE backend URL. If 1–6 all pass, V2 is ready for traffic.", items: [
+    { id: "smoke-1", html: "<strong>1.</strong> Admin login" },
+    { id: "smoke-2", html: "<strong>2.</strong> Open <code>vchikwanha@yahoo.com</code> in admin → see her sub + 85 orders + V1 stripe_customer_id <code>cus_Q8U9yzmMV04UJy</code>" },
+    { id: "smoke-3", html: "<strong>3.</strong> Open one of her recent paid orders (e.g., #178386) → snapshot populated, items show meal names, total = £63.92" },
+    { id: "smoke-4", html: "<strong>4.</strong> Test customer login on FE (use forgot-password if needed) → land on dashboard, see subscription" },
+    { id: "smoke-5", html: "<strong>5.</strong> Open her order history → at least 5 orders visible with correct dates and totals" },
+    { id: "smoke-6", html: "<strong>6.</strong> Menu loads → premium dishes show price tag → modal shows <code>salt</code> not <code>sodium</code>" },
+  ]},
+];
+
+const USERS = [
+  { key: "m", name: "Mykyta" },
+  { key: "j", name: "James" },
+  { key: "k", name: "Kaja" },
+];
+const USER_NAMES = Object.fromEntries(USERS.map(u => [u.key, u.name]));
+
+const ME_KEY = "v2-cutover-me";
+let ME = localStorage.getItem(ME_KEY);
+
+function pickMe(key) {
+  ME = key;
+  localStorage.setItem(ME_KEY, key);
+  document.getElementById("who-modal").classList.remove("show");
+  document.querySelectorAll("#who-pick button").forEach(b => {
+    b.classList.toggle("active", b.dataset.pick === key);
+    b.classList.add(b.dataset.pick);
+  });
+  render();
+}
+document.querySelectorAll("[data-pick]").forEach(b => {
+  b.addEventListener("click", () => pickMe(b.dataset.pick));
+});
+if (!ME) {
+  document.getElementById("who-modal").classList.add("show");
+} else {
+  document.querySelectorAll("#who-pick button").forEach(b => {
+    b.classList.toggle("active", b.dataset.pick === ME);
+    b.classList.add(b.dataset.pick);
+  });
+}
+
+let state = { status: {}, notes: {}, openSections: JSON.parse(localStorage.getItem("v2-cutover-open") || "{}") };
+
+function getStatus(id, user) { return (state.status[id] && state.status[id][user]) || null; }
+function isPass(id, user) { return getStatus(id, user) === "pass"; }
+function isFail(id, user) { return getStatus(id, user) === "fail"; }
+function getNote(id, user) { return (state.notes[id] && state.notes[id][user]) || ""; }
+function setLocalStatus(id, user, val) {
+  if (!state.status[id]) state.status[id] = {};
+  state.status[id][user] = val;
+}
+function setLocalNote(id, user, val) {
+  if (!state.notes[id]) state.notes[id] = {};
+  state.notes[id][user] = val;
+}
+
+const TEST_INDEX = {};
+TESTS.forEach(sec => {
+  sec.items.forEach(i => {
+    TEST_INDEX[i.id] = { section: sec.section, html: i.html };
+  });
+});
+
+async function loadAll() {
+  setConn("connecting", "Loading…");
+  const { data, error } = await sb.from(TABLE).select("test_id,user_key,status,note");
+  if (error) { setConn("err", "Load failed"); console.error(error); return; }
+  state.status = {}; state.notes = {};
+  data.forEach(r => {
+    setLocalStatus(r.test_id, r.user_key, r.status);
+    setLocalNote(r.test_id, r.user_key, r.note || "");
+  });
+  setConn("live", "Live · synced");
+}
+
+async function upsertRow(test_id, user_key, fields) {
+  const row = {
+    test_id, user_key,
+    status: getStatus(test_id, user_key),
+    note: getNote(test_id, user_key),
+    ...fields,
+  };
+  const { error } = await sb.from(TABLE).upsert(row, { onConflict: "test_id,user_key" });
+  if (error) { setConn("err", "Save failed"); console.error(error); return false; }
+  setConn("live", "Live · synced");
+  return true;
+}
+
+const noteTimers = {};
+function scheduleNoteSave(test_id, user_key, val) {
+  setLocalNote(test_id, user_key, val);
+  const k = test_id + "|" + user_key;
+  clearTimeout(noteTimers[k]);
+  const block = document.querySelector(`.note-block[data-id="${test_id}"][data-user="${user_key}"]`);
+  if (block) block.classList.add("saving");
+  noteTimers[k] = setTimeout(async () => {
+    await upsertRow(test_id, user_key, { note: val });
+    if (block) block.classList.remove("saving");
+    toast("Saved");
+  }, 600);
+}
+
+async function saveStatus(test_id, user_key, val) {
+  setLocalStatus(test_id, user_key, val);
+  const ok = await upsertRow(test_id, user_key, { status: val });
+  if (ok) {
+    if (val === "pass") toast("Marked pass");
+    else if (val === "fail") toast("Marked fail");
+    else toast("Cleared");
+  }
+}
+
+function subscribeRealtime() {
+  sb.channel("cutover-realtime")
+    .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, payload => {
+      const r = payload.new || payload.old;
+      if (!r) return;
+      const before = { status: getStatus(r.test_id, r.user_key) };
+      if (payload.eventType === "DELETE") {
+        if (state.status[r.test_id]) delete state.status[r.test_id][r.user_key];
+        if (state.notes[r.test_id])  delete state.notes[r.test_id][r.user_key];
+      } else {
+        setLocalStatus(r.test_id, r.user_key, r.status);
+        setLocalNote(r.test_id, r.user_key, r.note || "");
+      }
+      updateRowUI(r.test_id);
+      renderFailures();
+      const changedStatus = before.status !== getStatus(r.test_id, r.user_key);
+      if (changedStatus && r.user_key !== ME) {
+        const row = document.querySelector(`.test[data-id="${r.test_id}"]`);
+        if (row) {
+          row.classList.remove("flash");
+          void row.offsetWidth;
+          row.classList.add("flash");
+        }
+        const newStatus = getStatus(r.test_id, r.user_key);
+        const verb = newStatus === "fail" ? "marked a FAIL on" : newStatus === "pass" ? "passed" : "cleared";
+        toast(`${USER_NAMES[r.user_key]} ${verb} a test`);
+      }
+    })
+    .subscribe(status => {
+      if (status === "SUBSCRIBED") setConn("live", "Live · synced");
+      else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setConn("err", "Disconnected");
+    });
+}
+
+function setConn(state, text) {
+  const el = document.getElementById("conn");
+  el.classList.remove("live", "err", "connecting");
+  el.classList.add(state);
+  document.getElementById("conn-text").textContent = text;
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 1200);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function render() {
+  const root = document.getElementById("sections");
+  root.innerHTML = "";
+  TESTS.forEach((sec, sIdx) => {
+    const det = document.createElement("details");
+    det.className = "section" + (sec.smoke ? " smoke" : "");
+    const sectionKey = "sec-" + sIdx;
+    if (state.openSections[sectionKey] !== false) det.open = true;
+    det.addEventListener("toggle", () => {
+      state.openSections[sectionKey] = det.open;
+      localStorage.setItem("v2-cutover-open", JSON.stringify(state.openSections));
+    });
+
+    const sum = document.createElement("summary");
+    sum.innerHTML = `<span class="chev">▶</span><span>${sec.section}</span><span class="progress" data-section="${sIdx}"><span class="bar"><span></span></span><span class="pct">0/0</span></span>`;
+    det.appendChild(sum);
+
+    if (sec.note) {
+      const n = document.createElement("div");
+      n.style.cssText = "padding: 10px 20px 0; color: var(--muted); font-size: 13px;";
+      n.textContent = sec.note;
+      det.appendChild(n);
+    }
+
+    sec.items.forEach(item => {
+      const t = document.createElement("div");
+      t.className = "test";
+      t.dataset.id = item.id;
+      const hasNotes = USERS.some(u => getNote(item.id, u.key).trim().length > 0);
+      t.innerHTML = `
+        <div class="test-row">
+          <div>
+            <div class="test-text">${item.html}</div>
+            <button class="notes-toggle" data-id="${item.id}">${hasNotes ? '✎ Notes' : '+ Add notes'}</button>
+          </div>
+          <div class="checks">
+            ${USERS.map(u => {
+              const status = getStatus(item.id, u.key);
+              const owner = u.key === ME;
+              return `
+              <div class="person-status">
+                <div class="person-name ${u.key}">${u.name}</div>
+                <div class="pf-group ${owner ? '' : 'disabled'}" title="${owner ? 'Click pass or fail' : 'Only ' + u.name + ' can mark this'}">
+                  <button class="pf-btn pass ${status === 'pass' ? 'active' : ''}" data-id="${item.id}" data-user="${u.key}" data-val="pass" ${owner ? '' : 'disabled'}>Pass</button>
+                  <button class="pf-btn fail ${status === 'fail' ? 'active' : ''}" data-id="${item.id}" data-user="${u.key}" data-val="fail" ${owner ? '' : 'disabled'}>Fail</button>
+                </div>
+              </div>
+            `;
+            }).join("")}
+          </div>
+        </div>
+        <div class="notes-area" data-id="${item.id}">
+          ${USERS.map(u => `
+            <div class="note-block ${u.key}" data-id="${item.id}" data-user="${u.key}">
+              <span class="saving">saving…</span>
+              <label>${u.name}'s notes${u.key === ME ? '' : ' (read-only)'}</label>
+              <textarea data-id="${item.id}" data-user="${u.key}" placeholder="${u.key === ME ? 'Notes from ' + u.name + '…' : '(no notes yet)'}" ${u.key !== ME ? 'readonly' : ''}>${escapeHtml(getNote(item.id, u.key))}</textarea>
+            </div>
+          `).join("")}
+        </div>
+      `;
+      det.appendChild(t);
+    });
+    root.appendChild(det);
+  });
+
+  root.querySelectorAll('button.pf-btn:not([disabled])').forEach(btn => {
+    btn.addEventListener("click", e => {
+      const id = btn.dataset.id;
+      const user = btn.dataset.user;
+      const val = btn.dataset.val;
+      const current = getStatus(id, user);
+      const next = current === val ? null : val;
+      saveStatus(id, user, next);
+      updateRowUI(id);
+      renderFailures();
+      if (next === "fail") {
+        const area = root.querySelector(`.notes-area[data-id="${id}"]`);
+        if (area) area.classList.add("open");
+        setTimeout(() => {
+          const ta = root.querySelector(`textarea[data-id="${id}"][data-user="${user}"]`);
+          if (ta) { ta.focus(); }
+        }, 0);
+      }
+    });
+  });
+  root.querySelectorAll('textarea:not([readonly])').forEach(ta => {
+    ta.addEventListener("input", e => {
+      scheduleNoteSave(e.target.dataset.id, e.target.dataset.user, e.target.value);
+      const id = e.target.dataset.id;
+      const btn = root.querySelector(`button.notes-toggle[data-id="${id}"]`);
+      const hasNotes = USERS.some(u => getNote(id, u.key).trim().length > 0);
+      if (btn) btn.textContent = hasNotes ? '✎ Notes' : '+ Add notes';
+    });
+  });
+  root.querySelectorAll('.notes-toggle').forEach(btn => {
+    btn.addEventListener("click", e => {
+      const id = e.target.dataset.id;
+      root.querySelector(`.notes-area[data-id="${id}"]`).classList.toggle("open");
+    });
+  });
+
+  root.querySelectorAll('.notes-area').forEach(area => {
+    const id = area.dataset.id;
+    if (USERS.some(u => getNote(id, u.key).trim().length > 0)) area.classList.add("open");
+  });
+
+  updateAllCounts();
+  applyFilter();
+}
+
+function updateRowUI(id) {
+  USERS.forEach(u => {
+    const status = getStatus(id, u.key);
+    const passBtn = document.querySelector(`button.pf-btn.pass[data-id="${id}"][data-user="${u.key}"]`);
+    const failBtn = document.querySelector(`button.pf-btn.fail[data-id="${id}"][data-user="${u.key}"]`);
+    if (passBtn) passBtn.classList.toggle("active", status === "pass");
+    if (failBtn) failBtn.classList.toggle("active", status === "fail");
+    const ta = document.querySelector(`textarea[data-id="${id}"][data-user="${u.key}"]`);
+    if (ta && document.activeElement !== ta) ta.value = getNote(id, u.key);
+  });
+  const btn = document.querySelector(`button.notes-toggle[data-id="${id}"]`);
+  if (btn) {
+    const hasNotes = USERS.some(u => getNote(id, u.key).trim().length > 0);
+    btn.textContent = hasNotes ? '✎ Notes' : '+ Add notes';
+  }
+  updateAllCounts();
+  applyFilter();
+}
+
+function updateAllCounts() {
+  const total = TESTS.reduce((n, s) => n + s.items.length, 0);
+  USERS.forEach(u => {
+    const passCount = TESTS.reduce((acc, s) => acc + s.items.filter(i => isPass(i.id, u.key)).length, 0);
+    const failCount = TESTS.reduce((acc, s) => acc + s.items.filter(i => isFail(i.id, u.key)).length, 0);
+    const el = document.getElementById("count-" + u.key);
+    el.innerHTML = `<span style="color:#10b981">${passCount}✓</span> · <span style="color:#ef4444">${failCount}✗</span> <span style="opacity:0.6">/ ${total}</span>`;
+  });
+  TESTS.forEach((sec, sIdx) => {
+    const total = sec.items.length;
+    const allPassed = sec.items.filter(i => USERS.every(u => isPass(i.id, u.key))).length;
+    const progEl = document.querySelector(`.progress[data-section="${sIdx}"]`);
+    if (progEl) {
+      const pct = total ? Math.round((allPassed / total) * 100) : 0;
+      progEl.querySelector(".bar > span").style.width = pct + "%";
+      progEl.querySelector(".pct").textContent = `${allPassed}/${total}`;
+    }
+    sec.items.forEach(i => {
+      const row = document.querySelector(`.test[data-id="${i.id}"]`);
+      if (row) {
+        const allPass = USERS.every(u => isPass(i.id, u.key));
+        const anyFail = USERS.some(u => isFail(i.id, u.key));
+        row.classList.toggle("all-done", allPass && !anyFail);
+        row.classList.toggle("has-fail", anyFail);
+      }
+    });
+  });
+}
+
+function applyFilter() {
+  const filter = document.getElementById("filter").value;
+  TESTS.forEach(sec => {
+    sec.items.forEach(i => {
+      const tested = USERS.filter(u => getStatus(i.id, u.key) !== null).length;
+      const passed = USERS.filter(u => isPass(i.id, u.key)).length;
+      const anyFail = USERS.some(u => isFail(i.id, u.key));
+      const hasNotes = USERS.some(u => getNote(i.id, u.key).trim().length > 0);
+      let show = true;
+      if (filter === "incomplete") show = tested === 0;
+      else if (filter === "any-fail") show = anyFail;
+      else if (filter === "all-pass") show = passed === 3 && !anyFail;
+      else if (filter === "has-notes") show = hasNotes;
+      const row = document.querySelector(`.test[data-id="${i.id}"]`);
+      if (row) row.style.display = show ? "" : "none";
+    });
+  });
+}
+
+function renderFailures() {
+  const ul = document.getElementById("failures-list");
+  const panel = document.getElementById("failures-panel");
+  const failures = [];
+  TESTS.forEach(sec => {
+    sec.items.forEach(i => {
+      USERS.forEach(u => {
+        if (isFail(i.id, u.key)) {
+          failures.push({
+            test_id: i.id,
+            section: sec.section,
+            html: i.html,
+            user: u,
+            note: getNote(i.id, u.key),
+          });
+        }
+      });
+    });
+  });
+  document.getElementById("fail-count").textContent = failures.length;
+  panel.classList.toggle("has-failures", failures.length > 0);
+  ul.innerHTML = failures.map(f => `
+    <li class="failure-item" data-jump="${f.test_id}">
+      <span class="who-tag ${f.user.key}">${f.user.name}</span>
+      <div class="ftext">
+        <div>${f.html}</div>
+        <div class="fsection">${f.section}</div>
+        ${f.note.trim() ? `<div class="fnote">"${escapeHtml(f.note)}"</div>` : '<div class="fnote" style="color:#b91c1c">⚠ no notes yet — click to add details</div>'}
+      </div>
+    </li>
+  `).join("");
+  ul.querySelectorAll(".failure-item").forEach(li => {
+    li.addEventListener("click", () => jumpToTest(li.dataset.jump));
+  });
+}
+
+function jumpToTest(test_id) {
+  TESTS.forEach((sec, sIdx) => {
+    if (sec.items.some(i => i.id === test_id)) {
+      const det = document.querySelectorAll("details.section")[sIdx];
+      if (det && !det.open) det.open = true;
+    }
+  });
+  const area = document.querySelector(`.notes-area[data-id="${test_id}"]`);
+  if (area) area.classList.add("open");
+  const row = document.querySelector(`.test[data-id="${test_id}"]`);
+  if (row) {
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.classList.remove("jumped");
+    void row.offsetWidth;
+    row.classList.add("jumped");
+  }
+}
+
+document.getElementById("filter").addEventListener("change", applyFilter);
+document.getElementById("expand-all").addEventListener("click", () => {
+  document.querySelectorAll("details.section").forEach(d => { d.open = true; });
+});
+document.getElementById("collapse-all").addEventListener("click", () => {
+  document.querySelectorAll("details.section").forEach(d => { d.open = false; });
+});
+document.getElementById("export-btn").addEventListener("click", () => {
+  let out = `# V2 Cutover Manual Test Checklist — Export\nGenerated: ${new Date().toLocaleString()}\n\n`;
+
+  const failures = [];
+  TESTS.forEach(sec => sec.items.forEach(i => USERS.forEach(u => {
+    if (isFail(i.id, u.key)) failures.push({ sec: sec.section, i, u, note: getNote(i.id, u.key) });
+  })));
+  if (failures.length) {
+    out += `## ⚠ Failures (${failures.length})\n\n`;
+    failures.forEach(f => {
+      const text = f.i.html.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      out += `- **${f.u.name}** · _${f.sec}_ · ${text}\n`;
+      if (f.note.trim()) out += `  > ${f.note.replace(/\n/g, "\n  > ")}\n`;
+    });
+    out += `\n---\n`;
+  }
+
+  TESTS.forEach(sec => {
+    out += `\n## ${sec.section}\n`;
+    sec.items.forEach(i => {
+      const text = i.html.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      const marks = USERS.map(u => {
+        const s = getStatus(i.id, u.key);
+        return `${u.name}:${s === "pass" ? "✓" : s === "fail" ? "✗" : "·"}`;
+      }).join(" ");
+      const allPass = USERS.every(u => isPass(i.id, u.key));
+      out += `- [${allPass ? "x" : " "}] ${text}  (${marks})\n`;
+      USERS.forEach(u => {
+        const n = getNote(i.id, u.key).trim();
+        if (n) out += `    - ${u.name}: ${n.replace(/\n/g, "\n      ")}\n`;
+      });
+    });
+  });
+  const blob = new Blob([out], { type: "text/markdown" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `v2-cutover-export-${new Date().toISOString().slice(0,10)}.md`;
+  a.click();
+});
+
+(async () => {
+  render();
+  await loadAll();
+  render();
+  renderFailures();
+  subscribeRealtime();
+})();
+</script>
+</body>
+</html>
