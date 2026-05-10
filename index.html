@@ -864,6 +864,11 @@ function subscribeRealtime() {
         setLocalStatus(r.test_id, r.user_key, r.status);
         setLocalNote(r.test_id, r.user_key, r.note || "");
         setLocalResolved(r.test_id, r.user_key, r.resolved_by ? { by: r.resolved_by, at: r.resolved_at, note: r.resolved_note || "" } : null);
+        // Auto-open the notes area so newly-arrived notes are visible without a refresh
+        if ((r.note || "").trim().length > 0) {
+          const area = document.querySelector(`.notes-area[data-id="${r.test_id}"]`);
+          if (area) area.classList.add("open");
+        }
       }
       updateRowUI(r.test_id);
       renderFailures();
