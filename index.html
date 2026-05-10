@@ -14,6 +14,7 @@
     --m: #ef4444;
     --j: #10b981;
     --k: #8b5cf6;
+    --a: #0ea5e9;
     --warn: #d97706;
     --done: #f0fdf4;
   }
@@ -44,6 +45,7 @@
   .me-bar .who-pick button.active.m { background: var(--m); border-color: white; }
   .me-bar .who-pick button.active.j { background: var(--j); border-color: white; }
   .me-bar .who-pick button.active.k { background: var(--k); border-color: white; }
+  .me-bar .who-pick button.active.a { background: var(--a); border-color: white; }
   .conn { margin-left: auto; font-size: 12px; display: flex; align-items: center; gap: 8px; }
   .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: #facc15; }
   .conn.live .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
@@ -72,6 +74,7 @@
   .dot.m { background: var(--m); }
   .dot.j { background: var(--j); }
   .dot.k { background: var(--k); }
+  .dot.a { background: var(--a); }
   .pill .count {
     font-variant-numeric: tabular-nums;
     color: var(--muted); font-size: 12px;
@@ -169,6 +172,7 @@
   .person-name.m { color: var(--m); }
   .person-name.j { color: var(--j); }
   .person-name.k { color: var(--k); }
+  .person-name.a { color: var(--a); }
   .pf-group {
     display: inline-flex;
     border-radius: 6px;
@@ -216,6 +220,7 @@
   .note-block.m { border-left-color: var(--m); }
   .note-block.j { border-left-color: var(--j); }
   .note-block.k { border-left-color: var(--k); }
+  .note-block.a { border-left-color: var(--a); }
   .note-block label {
     display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em;
   }
@@ -260,6 +265,7 @@
   .att .att-by.m { color: var(--m); }
   .att .att-by.j { color: var(--j); }
   .att .att-by.k { color: var(--k); }
+  .att .att-by.a { color: var(--a); }
   .att .att-del {
     position: absolute; top: -6px; right: -6px;
     width: 18px; height: 18px; border-radius: 50%; background: white; border: 1px solid var(--line);
@@ -356,6 +362,7 @@
   .failure-item .who-tag.m { background: var(--m); }
   .failure-item .who-tag.j { background: var(--j); }
   .failure-item .who-tag.k { background: var(--k); }
+  .failure-item .who-tag.a { background: var(--a); }
   .failure-item .ftext { flex: 1; }
   .failure-item .fnote {
     color: var(--muted); font-size: 12.5px; margin-top: 2px; font-style: italic;
@@ -409,6 +416,7 @@
   .who-modal .who-pick button.m { color: var(--m); border-color: var(--m); }
   .who-modal .who-pick button.j { color: var(--j); border-color: var(--j); }
   .who-modal .who-pick button.k { color: var(--k); border-color: var(--k); }
+  .who-modal .who-pick button.a { color: var(--a); border-color: var(--a); }
   .who-modal .who-pick button:hover { transform: translateY(-2px); }
 
   @media (max-width: 700px) {
@@ -430,6 +438,7 @@
       <button class="m" data-pick="m">Mykyta</button>
       <button class="j" data-pick="j">James</button>
       <button class="k" data-pick="k">Kaja</button>
+      <button class="a" data-pick="a">AI</button>
     </div>
   </div>
 </div>
@@ -447,6 +456,7 @@
     <button data-pick="m" class="m">Mykyta</button>
     <button data-pick="j" class="j">James</button>
     <button data-pick="k" class="k">Kaja</button>
+    <button data-pick="a" class="a">AI</button>
   </div>
   <div class="conn" id="conn"><span class="dot"></span><span id="conn-text">Connecting…</span></div>
 </div>
@@ -486,6 +496,7 @@
     <div class="pill"><span class="dot m"></span><span>Mykyta</span><span class="count" id="count-m">0</span></div>
     <div class="pill"><span class="dot j"></span><span>James</span><span class="count" id="count-j">0</span></div>
     <div class="pill"><span class="dot k"></span><span>Kaja</span><span class="count" id="count-k">0</span></div>
+    <div class="pill"><span class="dot a"></span><span>AI</span><span class="count" id="count-a">0</span></div>
   </div>
   <div class="filter-bar">
     <label>Show:
@@ -493,7 +504,7 @@
         <option value="all">All tests</option>
         <option value="incomplete">Not tested (by anyone)</option>
         <option value="any-fail">Has a failure</option>
-        <option value="all-pass">All three passed</option>
+        <option value="all-pass">All passed</option>
         <option value="has-notes">Has notes</option>
       </select>
     </label>
@@ -665,6 +676,7 @@ const USERS = [
   { key: "m", name: "Mykyta" },
   { key: "j", name: "James" },
   { key: "k", name: "Kaja" },
+  { key: "a", name: "AI" },
 ];
 const USER_NAMES = Object.fromEntries(USERS.map(u => [u.key, u.name]));
 
@@ -1081,7 +1093,7 @@ function applyFilter() {
       let show = true;
       if (filter === "incomplete") show = tested === 0;
       else if (filter === "any-fail") show = anyFail;
-      else if (filter === "all-pass") show = passed === 3 && !anyFail;
+      else if (filter === "all-pass") show = passed === USERS.length && !anyFail;
       else if (filter === "has-notes") show = hasNotes;
       const row = document.querySelector(`.test[data-id="${i.id}"]`);
       if (row) row.style.display = show ? "" : "none";
