@@ -240,6 +240,43 @@
   }
   .note-block.saving .saving { opacity: 1; }
 
+  /* attachments */
+  .test.drag-over { background: #dbeafe !important; outline: 2px dashed var(--accent); outline-offset: -4px; }
+  .attachments {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-top: 10px;
+  }
+  .attachments:empty { display: none; }
+  .att {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center;
+    width: 88px; padding: 6px; border: 1px solid var(--line); border-radius: 6px;
+    background: white; font-size: 10px; text-decoration: none; color: var(--ink);
+  }
+  .att img { width: 76px; height: 56px; object-fit: cover; border-radius: 3px; }
+  .att .file-icon { width: 76px; height: 56px; border-radius: 3px; background: #f1f1ee; display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--muted); }
+  .att .att-name { margin-top: 4px; max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .att .att-by { color: var(--muted); font-size: 9px; }
+  .att .att-by.m { color: var(--m); }
+  .att .att-by.j { color: var(--j); }
+  .att .att-by.k { color: var(--k); }
+  .att .att-del {
+    position: absolute; top: -6px; right: -6px;
+    width: 18px; height: 18px; border-radius: 50%; background: white; border: 1px solid var(--line);
+    display: none; align-items: center; justify-content: center;
+    cursor: pointer; color: #b00; font-size: 14px; line-height: 1; padding: 0;
+  }
+  .att:hover .att-del.own { display: flex; }
+  .att-add {
+    width: 88px; height: 78px;
+    border: 1px dashed var(--line); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); cursor: pointer; font-size: 11px; text-align: center; padding: 4px;
+    background: #fafaf8;
+  }
+  .att-add:hover { border-color: var(--accent); color: var(--accent); }
+  .att-add.uploading { color: var(--accent); border-color: var(--accent); }
+
   .smoke {
     background: #fff7ed;
     border: 1px solid #fdba74;
@@ -446,12 +483,13 @@
 
 </div>
 
-<!-- Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 const SUPABASE_URL = "https://mzdlhllubuyaqsayfsmg.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WHX1Lfg46tPKBDqW4ioWLw_0jZfLaKT";
 const TABLE = "cutover_test_state";
+const ATT_TABLE = "cutover_attachments";
+const ATT_BUCKET = "cutover-attachments";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   realtime: { params: { eventsPerSecond: 10 } }
@@ -629,7 +667,7 @@ if (!ME) {
   });
 }
 
-let state = { status: {}, notes: {}, openSections: JSON.parse(localStorage.getItem("v2-cutover-open") || "{}") };
+let state = { status: {}, notes: {}, attachments: {}, openSections: JSON.parse(localStorage.getItem("v2-cutover-open") || "{}") };
 
 function getStatus(id, user) { return (state.status[id] && state.status[id][user]) || null; }
 function isPass(id, user) { return getStatus(id, user) === "pass"; }
@@ -653,14 +691,60 @@ TESTS.forEach(sec => {
 
 async function loadAll() {
   setConn("connecting", "Loading…");
-  const { data, error } = await sb.from(TABLE).select("test_id,user_key,status,note");
+  const [{ data, error }, attsRes] = await Promise.all([
+    sb.from(TABLE).select("test_id,user_key,status,note"),
+    sb.from(ATT_TABLE).select("id,test_id,user_key,filename,storage_path,mime_type,uploaded_at").order("uploaded_at", { ascending: true }),
+  ]);
   if (error) { setConn("err", "Load failed"); console.error(error); return; }
-  state.status = {}; state.notes = {};
+  state.status = {}; state.notes = {}; state.attachments = {};
   data.forEach(r => {
     setLocalStatus(r.test_id, r.user_key, r.status);
     setLocalNote(r.test_id, r.user_key, r.note || "");
   });
+  if (!attsRes.error && attsRes.data) {
+    attsRes.data.forEach(a => addLocalAttachment(a));
+  }
   setConn("live", "Live · synced");
+}
+
+function publicUrl(path) {
+  return `${SUPABASE_URL}/storage/v1/object/public/${ATT_BUCKET}/${path}`;
+}
+function addLocalAttachment(a) {
+  if (!state.attachments[a.test_id]) state.attachments[a.test_id] = [];
+  if (state.attachments[a.test_id].some(x => x.id === a.id)) return;
+  state.attachments[a.test_id].push({ ...a, public_url: publicUrl(a.storage_path) });
+}
+function removeLocalAttachment(test_id, id) {
+  if (!state.attachments[test_id]) return;
+  state.attachments[test_id] = state.attachments[test_id].filter(a => a.id !== id);
+}
+function getAttachments(test_id) { return state.attachments[test_id] || []; }
+
+async function uploadAttachment(test_id, file) {
+  if (!ME) { toast("Pick your name first"); return; }
+  if (file.size > 10 * 1024 * 1024) { toast("File too big (10MB max)"); return; }
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${test_id}/${crypto.randomUUID()}-${safe}`;
+  const up = await sb.storage.from(ATT_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+  if (up.error) { toast("Upload failed"); console.error(up.error); return; }
+  const ins = await sb.from(ATT_TABLE).insert({
+    test_id, user_key: ME, filename: file.name, storage_path: path, mime_type: file.type, size_bytes: file.size,
+  }).select().single();
+  if (ins.error) { toast("Save failed"); console.error(ins.error); return; }
+  addLocalAttachment(ins.data);
+  renderAttachmentsFor(test_id);
+  toast("Attached");
+}
+
+async function deleteAttachment(test_id, att) {
+  if (att.user_key !== ME) { toast("Only the uploader can delete"); return; }
+  if (!confirm(`Delete ${att.filename}?`)) return;
+  await sb.storage.from(ATT_BUCKET).remove([att.storage_path]);
+  await sb.from(ATT_TABLE).delete().eq("id", att.id);
+  removeLocalAttachment(test_id, att.id);
+  renderAttachmentsFor(test_id);
+  toast("Deleted");
 }
 
 async function upsertRow(test_id, user_key, fields) {
@@ -726,6 +810,18 @@ function subscribeRealtime() {
         const newStatus = getStatus(r.test_id, r.user_key);
         const verb = newStatus === "fail" ? "marked a FAIL on" : newStatus === "pass" ? "passed" : "cleared";
         toast(`${USER_NAMES[r.user_key]} ${verb} a test`);
+      }
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: ATT_TABLE }, payload => {
+      const r = payload.new || payload.old;
+      if (!r) return;
+      if (payload.eventType === "INSERT") {
+        addLocalAttachment(r);
+        renderAttachmentsFor(r.test_id);
+        if (r.user_key !== ME) toast(`${USER_NAMES[r.user_key]} attached ${r.filename}`);
+      } else if (payload.eventType === "DELETE") {
+        removeLocalAttachment(r.test_id, r.id);
+        renderAttachmentsFor(r.test_id);
       }
     })
     .subscribe(status => {
@@ -814,8 +910,11 @@ function render() {
             </div>
           `).join("")}
         </div>
+        <div class="attachments" data-att-for="${item.id}"></div>
       `;
       det.appendChild(t);
+      renderAttachmentsFor(item.id, t);
+      wireDrop(t, item.id);
     });
     root.appendChild(det);
   });
@@ -967,6 +1066,69 @@ function renderFailures() {
     li.addEventListener("click", () => jumpToTest(li.dataset.jump));
   });
 }
+
+function renderAttachmentsFor(test_id, root) {
+  const container = (root || document).querySelector(`.attachments[data-att-for="${test_id}"]`);
+  if (!container) return;
+  const atts = getAttachments(test_id);
+  const items = atts.map(a => {
+    const isImg = (a.mime_type || "").startsWith("image/");
+    const preview = isImg
+      ? `<img src="${a.public_url}" alt="${escapeHtml(a.filename)}">`
+      : `<div class="file-icon">📄</div>`;
+    return `
+      <a class="att" href="${a.public_url}" target="_blank" rel="noopener" title="${escapeHtml(a.filename)} — uploaded by ${USER_NAMES[a.user_key]}">
+        ${preview}
+        <div class="att-name">${escapeHtml(a.filename)}</div>
+        <div class="att-by ${a.user_key}">${USER_NAMES[a.user_key]}</div>
+        <button class="att-del ${a.user_key === ME ? 'own' : ''}" data-att-id="${a.id}" data-test-id="${test_id}" title="Delete">×</button>
+      </a>
+    `;
+  }).join("");
+  container.innerHTML = items + `<label class="att-add" title="Click or drop a file"><input type="file" hidden multiple accept="image/*,application/pdf,.txt,.log,.json"><span>+ attach<br>or drop</span></label>`;
+  container.querySelectorAll(".att-del.own").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation();
+      const att = atts.find(x => x.id === btn.dataset.attId);
+      if (att) deleteAttachment(test_id, att);
+    });
+  });
+  const picker = container.querySelector(".att-add input");
+  const addBtn = container.querySelector(".att-add");
+  picker.addEventListener("change", async e => {
+    addBtn.classList.add("uploading");
+    for (const f of e.target.files) await uploadAttachment(test_id, f);
+    addBtn.classList.remove("uploading");
+    picker.value = "";
+  });
+}
+
+function wireDrop(rowEl, test_id) {
+  let depth = 0;
+  rowEl.addEventListener("dragenter", e => {
+    if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes("Files")) return;
+    e.preventDefault(); depth++; rowEl.classList.add("drag-over");
+  });
+  rowEl.addEventListener("dragover", e => {
+    if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes("Files")) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = "copy";
+  });
+  rowEl.addEventListener("dragleave", () => {
+    depth--; if (depth <= 0) { depth = 0; rowEl.classList.remove("drag-over"); }
+  });
+  rowEl.addEventListener("drop", async e => {
+    e.preventDefault(); depth = 0; rowEl.classList.remove("drag-over");
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (!files.length) return;
+    const addBtn = rowEl.querySelector(".att-add");
+    if (addBtn) addBtn.classList.add("uploading");
+    for (const f of files) await uploadAttachment(test_id, f);
+    if (addBtn) addBtn.classList.remove("uploading");
+  });
+}
+
+window.addEventListener("dragover", e => { e.preventDefault(); }, false);
+window.addEventListener("drop", e => { e.preventDefault(); }, false);
 
 function jumpToTest(test_id) {
   TESTS.forEach((sec, sIdx) => {
