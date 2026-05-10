@@ -363,6 +363,32 @@
   .failure-item .fsection {
     color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px;
   }
+  .failure-item.resolved { background: #fef3c7; }
+  .failure-item.resolved:hover { background: #fde68a; }
+  .failure-item.resolved .who-tag { background: #d97706 !important; }
+  .failure-item .res-tag {
+    display: inline-block; margin-left: 6px;
+    background: #f59e0b; color: white;
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    padding: 1px 6px; border-radius: 3px; vertical-align: middle;
+  }
+  .failure-item .fix-note { color: #92400e; font-size: 12.5px; margin-top: 2px; }
+  .failure-item .factions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; margin-left: auto; }
+  .failure-item .fix-btn, .failure-item .reopen-btn {
+    background: white; border: 1px solid var(--line);
+    padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  .failure-item .fix-btn { color: #b45309; border-color: #fcd34d; }
+  .failure-item .fix-btn:hover { background: #fef3c7; }
+  .failure-item .reopen-btn:hover { background: #f4f4f1; }
+  .test.has-fail.fixed { background: #fef3c7; border-left-color: #f59e0b; }
+  .fix-pill {
+    display: inline-block; margin-left: 6px;
+    background: #f59e0b; color: white;
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 1px 5px; border-radius: 3px; vertical-align: middle;
+  }
 
   .who-modal-bg {
     position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -667,7 +693,7 @@ if (!ME) {
   });
 }
 
-let state = { status: {}, notes: {}, attachments: {}, openSections: JSON.parse(localStorage.getItem("v2-cutover-open") || "{}") };
+let state = { status: {}, notes: {}, resolved: {}, attachments: {}, openSections: JSON.parse(localStorage.getItem("v2-cutover-open") || "{}") };
 
 function getStatus(id, user) { return (state.status[id] && state.status[id][user]) || null; }
 function isPass(id, user) { return getStatus(id, user) === "pass"; }
@@ -681,6 +707,11 @@ function setLocalNote(id, user, val) {
   if (!state.notes[id]) state.notes[id] = {};
   state.notes[id][user] = val;
 }
+function getResolved(id, user) { return (state.resolved[id] && state.resolved[id][user]) || null; }
+function setLocalResolved(id, user, val) {
+  if (!state.resolved[id]) state.resolved[id] = {};
+  state.resolved[id][user] = val;
+}
 
 const TEST_INDEX = {};
 TESTS.forEach(sec => {
@@ -692,14 +723,15 @@ TESTS.forEach(sec => {
 async function loadAll() {
   setConn("connecting", "Loading…");
   const [{ data, error }, attsRes] = await Promise.all([
-    sb.from(TABLE).select("test_id,user_key,status,note"),
+    sb.from(TABLE).select("test_id,user_key,status,note,resolved_by,resolved_at,resolved_note"),
     sb.from(ATT_TABLE).select("id,test_id,user_key,filename,storage_path,mime_type,uploaded_at").order("uploaded_at", { ascending: true }),
   ]);
   if (error) { setConn("err", "Load failed"); console.error(error); return; }
-  state.status = {}; state.notes = {}; state.attachments = {};
+  state.status = {}; state.notes = {}; state.resolved = {}; state.attachments = {};
   data.forEach(r => {
     setLocalStatus(r.test_id, r.user_key, r.status);
     setLocalNote(r.test_id, r.user_key, r.note || "");
+    setLocalResolved(r.test_id, r.user_key, r.resolved_by ? { by: r.resolved_by, at: r.resolved_at, note: r.resolved_note || "" } : null);
   });
   if (!attsRes.error && attsRes.data) {
     attsRes.data.forEach(a => addLocalAttachment(a));
@@ -748,16 +780,34 @@ async function deleteAttachment(test_id, att) {
 }
 
 async function upsertRow(test_id, user_key, fields) {
+  const cur = getResolved(test_id, user_key);
   const row = {
     test_id, user_key,
     status: getStatus(test_id, user_key),
     note: getNote(test_id, user_key),
+    resolved_by:   cur ? cur.by   : null,
+    resolved_at:   cur ? cur.at   : null,
+    resolved_note: cur ? cur.note : null,
     ...fields,
   };
   const { error } = await sb.from(TABLE).upsert(row, { onConflict: "test_id,user_key" });
   if (error) { setConn("err", "Save failed"); console.error(error); return false; }
   setConn("live", "Live · synced");
   return true;
+}
+
+async function markFixed(test_id, user_key) {
+  if (!ME) { toast("Pick your name first"); return; }
+  const note = prompt("Resolution note (optional) — e.g. 'deployed in commit abc123' or 'config tweak in admin':", "") || "";
+  const at = new Date().toISOString();
+  setLocalResolved(test_id, user_key, { by: ME, at, note });
+  const ok = await upsertRow(test_id, user_key, { resolved_by: ME, resolved_at: at, resolved_note: note });
+  if (ok) { toast("Marked fixed — awaiting retest"); renderFailures(); updateRowUI(test_id); }
+}
+async function clearFixed(test_id, user_key) {
+  setLocalResolved(test_id, user_key, null);
+  const ok = await upsertRow(test_id, user_key, { resolved_by: null, resolved_at: null, resolved_note: null });
+  if (ok) { toast("Reopened"); renderFailures(); updateRowUI(test_id); }
 }
 
 const noteTimers = {};
@@ -776,7 +826,12 @@ function scheduleNoteSave(test_id, user_key, val) {
 
 async function saveStatus(test_id, user_key, val) {
   setLocalStatus(test_id, user_key, val);
-  const ok = await upsertRow(test_id, user_key, { status: val });
+  let extra = {};
+  if (val === "pass" || val === null) {
+    setLocalResolved(test_id, user_key, null);
+    extra = { resolved_by: null, resolved_at: null, resolved_note: null };
+  }
+  const ok = await upsertRow(test_id, user_key, { status: val, ...extra });
   if (ok) {
     if (val === "pass") toast("Marked pass");
     else if (val === "fail") toast("Marked fail");
@@ -796,6 +851,7 @@ function subscribeRealtime() {
       } else {
         setLocalStatus(r.test_id, r.user_key, r.status);
         setLocalNote(r.test_id, r.user_key, r.note || "");
+        setLocalResolved(r.test_id, r.user_key, r.resolved_by ? { by: r.resolved_by, at: r.resolved_at, note: r.resolved_note || "" } : null);
       }
       updateRowUI(r.test_id);
       renderFailures();
@@ -1005,8 +1061,10 @@ function updateAllCounts() {
       if (row) {
         const allPass = USERS.every(u => isPass(i.id, u.key));
         const anyFail = USERS.some(u => isFail(i.id, u.key));
+        const failsAllResolved = anyFail && USERS.every(u => !isFail(i.id, u.key) || getResolved(i.id, u.key));
         row.classList.toggle("all-done", allPass && !anyFail);
         row.classList.toggle("has-fail", anyFail);
+        row.classList.toggle("fixed", failsAllResolved);
       }
     });
   });
@@ -1045,25 +1103,54 @@ function renderFailures() {
             html: i.html,
             user: u,
             note: getNote(i.id, u.key),
+            resolved: getResolved(i.id, u.key),
           });
         }
       });
     });
   });
-  document.getElementById("fail-count").textContent = failures.length;
+  const open = failures.filter(f => !f.resolved).length;
+  const fixed = failures.filter(f => f.resolved).length;
+  const badge = document.getElementById("fail-count");
+  if (fixed > 0) {
+    badge.innerHTML = `${open} <span style="opacity:0.7;font-weight:400">· ${fixed} awaiting retest</span>`;
+  } else {
+    badge.textContent = open;
+  }
   panel.classList.toggle("has-failures", failures.length > 0);
-  ul.innerHTML = failures.map(f => `
-    <li class="failure-item" data-jump="${f.test_id}">
+  ul.innerHTML = failures.map(f => {
+    const r = f.resolved;
+    return `
+    <li class="failure-item ${r ? 'resolved' : ''}" data-jump="${f.test_id}">
       <span class="who-tag ${f.user.key}">${f.user.name}</span>
       <div class="ftext">
-        <div>${f.html}</div>
+        <div>${f.html}${r ? `<span class="res-tag">awaiting retest</span>` : ''}</div>
         <div class="fsection">${f.section}</div>
-        ${f.note.trim() ? `<div class="fnote">"${escapeHtml(f.note)}"</div>` : '<div class="fnote" style="color:#b91c1c">⚠ no notes yet — click to add details</div>'}
+        ${f.note.trim() ? `<div class="fnote">"${escapeHtml(f.note)}"</div>` : (r ? '' : '<div class="fnote" style="color:#b91c1c">⚠ no notes yet — click to add details</div>')}
+        ${r ? `<div class="fix-note">✓ Fixed by ${USER_NAMES[r.by]}${r.note ? ': ' + escapeHtml(r.note) : ''}</div>` : ''}
+      </div>
+      <div class="factions">
+        ${r
+          ? `<button class="reopen-btn" data-action="reopen" data-test="${f.test_id}" data-user="${f.user.key}" title="Mark as not actually fixed">Reopen</button>`
+          : `<button class="fix-btn" data-action="fix" data-test="${f.test_id}" data-user="${f.user.key}" title="Bug is fixed — ${f.user.name} should retest to verify">Mark fixed →</button>`
+        }
       </div>
     </li>
-  `).join("");
+  `;
+  }).join("");
   ul.querySelectorAll(".failure-item").forEach(li => {
-    li.addEventListener("click", () => jumpToTest(li.dataset.jump));
+    li.addEventListener("click", e => {
+      if (e.target.closest("button")) return;
+      jumpToTest(li.dataset.jump);
+    });
+  });
+  ul.querySelectorAll("button[data-action]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const t = btn.dataset.test, u = btn.dataset.user;
+      if (btn.dataset.action === "fix")    markFixed(t, u);
+      if (btn.dataset.action === "reopen") clearFixed(t, u);
+    });
   });
 }
 
